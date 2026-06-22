@@ -1,0 +1,10 @@
+# Normalize line endings: store everything as LF in the repo so files read by
+# Linux Docker containers (shell scripts, Dockerfiles, gradle) never get CRLF.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.jar binary
