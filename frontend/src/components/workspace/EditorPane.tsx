@@ -3,13 +3,34 @@ import { EditorView } from "@codemirror/view";
 import { api } from "@/api/client";
 import { ConflictError } from "@/api/types";
 import { createEditor } from "@/editor/createEditor";
+import { resolveTarget } from "@/editor/wikilink/resolveTarget";
 import { useEditorStore } from "@/stores/editorStore";
+import { flattenFiles, useVaultStore } from "@/stores/vaultStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+
+/** Resolve a wikilink target and open it, creating the note if it doesn't exist. */
+async function openTarget(target: string, split: boolean): Promise<void> {
+  const files = flattenFiles(useVaultStore.getState().tree);
+  const resolved = resolveTarget(target, files);
+  if (resolved) {
+    useWorkspaceStore.getState().openTab(resolved, { split });
+    return;
+  }
+  const newPath = target.endsWith(".md") ? target : `${target}.md`;
+  try {
+    await api.createFile(newPath, `# ${target}\n\n`);
+    await useVaultStore.getState().loadTree();
+  } catch {
+    // raced with another create; fall through and open whatever exists
+  }
+  useWorkspaceStore.getState().openTab(newPath, { split });
+}
 
 /**
- * Hosts the CodeMirror 6 inline Live Preview editor for one note. The editor
- * view is created once the note has loaded; user edits flow into the store +
- * debounced autosave, and external changes (WS reload) are pushed back into the
- * view. Re-mounted per note via a React key on the active path.
+ * Hosts the CodeMirror 6 inline Live Preview editor for one note. The view is
+ * created once the note has loaded; edits flow into the store + debounced
+ * autosave, external changes (WS reload) are pushed back into the view, and
+ * wikilinks navigate/create on click. Re-mounted per note via a key on the path.
  */
 export default function EditorPane({ path }: { path: string }) {
   const doc = useEditorStore((s) => s.docs[path]);
@@ -43,7 +64,6 @@ export default function EditorPane({ path }: { path: string }) {
     }, 400);
   }
 
-  // Create the editor once the note's content has loaded.
   useEffect(() => {
     if (viewRef.current || !hostRef.current || !doc || doc.loading) return;
     viewRef.current = createEditor({
@@ -52,6 +72,10 @@ export default function EditorPane({ path }: { path: string }) {
       onChange: (text) => {
         setContent(path, text);
         scheduleSave();
+      },
+      context: {
+        getFiles: () => flattenFiles(useVaultStore.getState().tree),
+        onOpen: (target, split) => void openTarget(target, split),
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

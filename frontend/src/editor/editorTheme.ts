@@ -39,6 +39,19 @@ export const editorTheme = EditorView.theme(
       borderRadius: "4px",
       padding: "0.1em 0.3em",
     },
+    ".cm-wikilink": {
+      color: "var(--text-accent)",
+      cursor: "pointer",
+      textDecoration: "none",
+    },
+    ".cm-wikilink:hover": { textDecoration: "underline" },
+    ".cm-wikilink-unresolved": { color: "#bf7c5e" },
+    ".cm-embed-image": {
+      maxWidth: "100%",
+      borderRadius: "6px",
+      display: "block",
+      margin: "4px 0",
+    },
   },
   { dark: true },
 );

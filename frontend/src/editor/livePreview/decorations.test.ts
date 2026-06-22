@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { buildDecorations } from "@/editor/livePreview/decorations";
+import { buildDecorations, LivePreviewContext } from "@/editor/livePreview/decorations";
+import { ImageEmbedWidget, WikiLinkWidget } from "@/editor/livePreview/widgets";
 
 interface Deco {
   from: number;
@@ -63,5 +64,62 @@ describe("buildDecorations (Live Preview)", () => {
     const d = decosFor("a `code` b\n\nx", 12); // cursor on last line
     expect(d.some((x) => x.cls === "cm-inline-code")).toBe(true);
     expect(d.some((x) => x.hidden)).toBe(true);
+  });
+});
+
+function widgetsFor(doc: string, cursor: number, files: string[]) {
+  const state = EditorState.create({
+    doc,
+    selection: { anchor: cursor },
+    extensions: [markdown({ base: markdownLanguage })],
+  });
+  ensureSyntaxTree(state, state.doc.length, 5000);
+  const context: LivePreviewContext = { getFiles: () => files, onOpen: () => {} };
+  const set = buildDecorations(state, context);
+
+  const out: unknown[] = [];
+  const iter = set.iter();
+  while (iter.value) {
+    const widget = (iter.value.spec as { widget?: unknown }).widget;
+    if (widget) out.push(widget);
+    iter.next();
+  }
+  return out;
+}
+
+describe("buildDecorations (wikilinks)", () => {
+  it("renders a resolved wikilink widget off-cursor", () => {
+    const widgets = widgetsFor("see [[Welcome]] here\n\nx", 22, ["Welcome.md"]);
+    const link = widgets.find((w): w is WikiLinkWidget => w instanceof WikiLinkWidget);
+    expect(link).toBeTruthy();
+    expect(link!.resolved).toBe(true);
+    expect(link!.target).toBe("Welcome");
+  });
+
+  it("marks a wikilink to a missing note as unresolved", () => {
+    const widgets = widgetsFor("see [[Ghost]] here\n\nx", 20, ["Welcome.md"]);
+    const link = widgets.find((w): w is WikiLinkWidget => w instanceof WikiLinkWidget);
+    expect(link!.resolved).toBe(false);
+  });
+
+  it("uses the alias as display text", () => {
+    const widgets = widgetsFor("see [[Welcome|home]] x\n\ny", 24, ["Welcome.md"]);
+    const link = widgets.find((w): w is WikiLinkWidget => w instanceof WikiLinkWidget);
+    expect(link!.display).toBe("home");
+  });
+
+  it("renders an image embed widget", () => {
+    const widgets = widgetsFor("![[img.png]]\n\nx", 14, ["img.png"]);
+    expect(widgets.some((w) => w instanceof ImageEmbedWidget)).toBe(true);
+  });
+
+  it("does not render a widget on the cursor's own line", () => {
+    const widgets = widgetsFor("see [[Welcome]] here", 6, ["Welcome.md"]);
+    expect(widgets.length).toBe(0);
+  });
+
+  it("ignores wikilinks inside inline code", () => {
+    const widgets = widgetsFor("`[[Welcome]]` and text\n\nx", 24, ["Welcome.md"]);
+    expect(widgets.length).toBe(0);
   });
 });

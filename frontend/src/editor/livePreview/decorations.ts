@@ -1,6 +1,19 @@
 import { EditorState, Range } from "@codemirror/state";
 import { Decoration, DecorationSet } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
+import { SyntaxNode } from "@lezer/common";
+import { api } from "@/api/client";
+import { resolveTarget } from "@/editor/wikilink/resolveTarget";
+import { ImageEmbedWidget, WikiLinkWidget } from "@/editor/livePreview/widgets";
+
+/** Context the editor provides so links can resolve + navigate. */
+export interface LivePreviewContext {
+  getFiles: () => string[];
+  onOpen: (target: string, split: boolean) => void;
+}
+
+const WIKILINK = /(!?)\[\[([^\]\n]+)\]\]/g;
+const IMAGE_EXT = /\.(png|jpe?g|gif|svg|webp|bmp)$/i;
 
 /**
  * Cursor-aware Live Preview decorations. For each markdown construct we style
@@ -39,7 +52,53 @@ function selectionTouchesLine(state: EditorState, from: number, to: number): boo
   return false;
 }
 
-export function buildDecorations(state: EditorState): DecorationSet {
+/** True if the position is inside any code construct (inline or fenced). */
+function isInCode(state: EditorState, pos: number): boolean {
+  let node: SyntaxNode | null = syntaxTree(state).resolveInner(pos, 1);
+  for (; node; node = node.parent) {
+    if (/Code/.test(node.name)) return true;
+  }
+  return false;
+}
+
+function scanWikilinks(state: EditorState, context: LivePreviewContext, out: Range<Decoration>[]): void {
+  const text = state.doc.toString();
+  WIKILINK.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = WIKILINK.exec(text)) !== null) {
+    const from = m.index;
+    const to = from + m[0].length;
+    if (isInCode(state, from)) continue;
+
+    const line = state.doc.lineAt(from);
+    if (selectionTouchesLine(state, line.from, line.to)) continue; // reveal raw on the cursor line
+
+    const embed = m[1] === "!";
+    const inner = m[2];
+    const pipe = inner.indexOf("|");
+    const rawTarget = (pipe >= 0 ? inner.slice(0, pipe) : inner).trim();
+    const alias = pipe >= 0 ? inner.slice(pipe + 1).trim() : "";
+    const target = rawTarget.replace(/[#^].*$/, "").trim(); // drop heading/block anchor
+
+    if (embed && IMAGE_EXT.test(target)) {
+      const path = resolveTarget(target, context.getFiles()) ?? target;
+      out.push(
+        Decoration.replace({
+          widget: new ImageEmbedWidget(api.attachmentUrl(path), alias || target),
+        }).range(from, to),
+      );
+    } else {
+      const resolved = resolveTarget(target, context.getFiles());
+      out.push(
+        Decoration.replace({
+          widget: new WikiLinkWidget(alias || rawTarget, target, resolved !== null, context.onOpen),
+        }).range(from, to),
+      );
+    }
+  }
+}
+
+export function buildDecorations(state: EditorState, context?: LivePreviewContext): DecorationSet {
   const out: Range<Decoration>[] = [];
   const tree = syntaxTree(state);
 
@@ -79,6 +138,10 @@ export function buildDecorations(state: EditorState): DecorationSet {
       }
     },
   });
+
+  if (context) {
+    scanWikilinks(state, context, out);
+  }
 
   return Decoration.set(out, true);
 }

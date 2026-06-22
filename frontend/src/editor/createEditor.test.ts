@@ -9,8 +9,9 @@ describe("createEditor", () => {
 
     const view = createEditor({
       parent,
-      doc: "# Heading\n\n**bold** and `code`",
+      doc: "# Heading\n\n**bold**, `code`, and [[Welcome]]\n\n![[img.png]]",
       onChange,
+      context: { getFiles: () => ["Welcome.md", "img.png"], onOpen: vi.fn() },
     });
 
     try {
