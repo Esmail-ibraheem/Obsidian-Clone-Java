@@ -82,4 +82,19 @@ class RenameServiceTest {
         String rewritten = renameService.rewrite(content, "Target", "Renamed");
         assertThat(rewritten).isEqualTo("see [[notes/Renamed|alias]]");
     }
+
+    @Test
+    void rewriteSkipsLinksInsideFencedAndInlineCode() {
+        String content = String.join("\n",
+                "Real link [[Target]] here.",
+                "```",
+                "code [[Target]] example",
+                "```",
+                "inline `[[Target]]` too.");
+        String rewritten = renameService.rewrite(content, "Target", "Renamed");
+
+        assertThat(rewritten).contains("Real link [[Renamed]] here.");
+        assertThat(rewritten).contains("code [[Target]] example"); // fenced: untouched
+        assertThat(rewritten).contains("inline `[[Target]]` too."); // inline code: untouched
+    }
 }

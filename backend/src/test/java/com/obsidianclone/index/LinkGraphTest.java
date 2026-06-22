@@ -44,6 +44,16 @@ class LinkGraphTest {
     }
 
     @Test
+    void pathLinkNamingAMissingFolderStaysUnresolved() {
+        LinkGraph graph = graphWith("Folder/Target.md", "x");
+        // A target that names a folder must not fall back to a basename match in a
+        // different folder.
+        assertThat(graph.resolve("bogus/Target", "a.md")).isEmpty();
+        // A bare name still resolves by basename.
+        assertThat(graph.resolve("Target", "a.md")).contains("Folder/Target.md");
+    }
+
+    @Test
     void resolvesExactRelativePathWithOrWithoutExtension() {
         LinkGraph graph = graphWith("Folder/Note.md", "x");
         assertThat(graph.resolve("Folder/Note", "a.md")).contains("Folder/Note.md");

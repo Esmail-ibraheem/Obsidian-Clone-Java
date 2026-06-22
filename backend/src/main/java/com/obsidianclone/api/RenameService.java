@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import com.obsidianclone.api.dto.RenameResponse;
 import com.obsidianclone.index.BacklinkEntry;
 import com.obsidianclone.index.IndexService;
+import com.obsidianclone.index.MarkdownText;
 import com.obsidianclone.vault.VaultService;
 
 /**
@@ -67,19 +68,26 @@ public class RenameService {
     }
 
     String rewrite(String content, String oldBase, String newBase) {
-        Matcher m = WIKILINK.matcher(content);
+        // Match links on a code-masked copy so wikilinks inside fenced/inline code
+        // are never rewritten; splice replacements back into the original content.
+        String masked = MarkdownText.maskCode(content);
+        Matcher m = WIKILINK.matcher(masked);
         StringBuilder out = new StringBuilder();
+        int last = 0;
         while (m.find()) {
+            out.append(content, last, m.start());
             String target = m.group(2).strip();
-            String replacement;
             if (baseNameOf(target).equalsIgnoreCase(oldBase)) {
-                replacement = m.group(1) + retarget(target, newBase) + nullToEmpty(m.group(3)) + m.group(4);
+                out.append(m.group(1))
+                        .append(retarget(target, newBase))
+                        .append(nullToEmpty(m.group(3)))
+                        .append(m.group(4));
             } else {
-                replacement = m.group(0);
+                out.append(content, m.start(), m.end());
             }
-            m.appendReplacement(out, Matcher.quoteReplacement(replacement));
+            last = m.end();
         }
-        m.appendTail(out);
+        out.append(content.substring(last));
         return out.toString();
     }
 

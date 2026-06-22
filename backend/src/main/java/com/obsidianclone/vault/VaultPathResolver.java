@@ -1,6 +1,5 @@
 package com.obsidianclone.vault;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -55,20 +54,17 @@ public class VaultPathResolver {
             throw new VaultException("Path escapes the vault: " + relative);
         }
 
-        // Defense in depth: if the target (or its nearest existing ancestor) is a
-        // symlink that points outside the vault, reject it.
-        Path existing = resolved;
-        while (existing != null && !Files.exists(existing)) {
-            existing = existing.getParent();
-        }
-        if (existing != null) {
-            try {
-                Path real = existing.toRealPath();
-                if (!real.startsWith(root.toRealPath())) {
-                    throw new VaultException("Path escapes the vault via symlink: " + relative);
-                }
-            } catch (IOException e) {
-                throw new VaultException("Cannot resolve path: " + relative, e);
+        // Reject symlinks anywhere along the path. The lexical check above stops
+        // ".." traversal, but the actual IO syscalls (read/write/move/list) follow
+        // symlinks, so an in-vault symlink could redirect outside the root. A notes
+        // vault has no legitimate need for symlinks, so we forbid them outright.
+        // isSymbolicLink inspects the link itself (true even for dangling links),
+        // closing the dangling-leaf write-through case too.
+        Path current = root;
+        for (Path part : root.relativize(resolved)) {
+            current = current.resolve(part);
+            if (Files.isSymbolicLink(current)) {
+                throw new VaultException("Symlinks are not allowed in the vault: " + relative);
             }
         }
 

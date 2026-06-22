@@ -48,6 +48,14 @@ public class LinkGraph {
         }
     }
 
+    /** Remove a note and every note beneath it (used when a directory is deleted). */
+    public void removeRecursively(String path) {
+        remove(path);
+        String prefix = path.endsWith("/") ? path : path + "/";
+        List<String> under = notes.keySet().stream().filter(p -> p.startsWith(prefix)).toList();
+        under.forEach(this::remove);
+    }
+
     public void clear() {
         notes.clear();
         byBasename.clear();
@@ -87,10 +95,15 @@ public class LinkGraph {
             }
         }
 
-        // 2. basename match (shortest path wins)
-        TreeSet<String> matches = byBasename.get(nameKey(t));
-        if (matches != null && !matches.isEmpty()) {
-            return matches.stream().min(shortestPath());
+        // 2. basename match (shortest path wins) — ONLY for bare names. A target
+        // that names a folder (contains "/") is a path link; if the path doesn't
+        // exist it stays unresolved rather than redirecting to a same-named note
+        // in another folder (matches Obsidian).
+        if (!t.contains("/")) {
+            TreeSet<String> matches = byBasename.get(nameKey(t));
+            if (matches != null && !matches.isEmpty()) {
+                return matches.stream().min(shortestPath());
+            }
         }
         return Optional.empty();
     }

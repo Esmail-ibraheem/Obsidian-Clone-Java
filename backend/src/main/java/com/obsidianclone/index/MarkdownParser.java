@@ -22,9 +22,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class MarkdownParser {
 
-    private static final Pattern FENCE = Pattern.compile("^\\s*(```|~~~)");
     private static final Pattern HEADING = Pattern.compile("^\\s{0,3}(#{1,6})\\s+(.*)$");
-    private static final Pattern INLINE_CODE = Pattern.compile("`[^`]*`");
     private static final Pattern WIKILINK = Pattern.compile("(!?)\\[\\[([^\\[\\]\\n]+)\\]\\]");
     private static final Pattern TAG = Pattern.compile("(?<![\\w/&#])#([A-Za-z0-9_][A-Za-z0-9_/-]*)");
 
@@ -34,17 +32,13 @@ public class MarkdownParser {
         List<String> headings = new ArrayList<>();
 
         String[] lines = text == null ? new String[0] : text.split("\n", -1);
-        boolean inFence = false;
+        MarkdownText.FenceState fence = new MarkdownText.FenceState();
 
         for (int i = 0; i < lines.length; i++) {
             String raw = lines[i];
             int lineNo = i + 1;
 
-            if (FENCE.matcher(raw).find()) {
-                inFence = !inFence;
-                continue;
-            }
-            if (inFence) {
+            if (fence.isDelimiter(raw) || fence.inFence()) {
                 continue;
             }
 
@@ -57,7 +51,7 @@ public class MarkdownParser {
                 // fall through: a heading line can still contain links/tags
             }
 
-            String scan = maskInlineCode(raw);
+            String scan = MarkdownText.maskInlineCode(raw);
 
             // Wikilinks / embeds; mask their spans so anchors aren't read as tags.
             StringBuilder forTags = new StringBuilder(scan);
@@ -114,20 +108,5 @@ public class MarkdownParser {
         }
 
         return new LinkRef(target, alias, anchorType, anchor, embed, lineNo, lineText);
-    }
-
-    private String maskInlineCode(String raw) {
-        Matcher m = INLINE_CODE.matcher(raw);
-        if (!m.find()) {
-            return raw;
-        }
-        StringBuilder sb = new StringBuilder(raw);
-        m.reset();
-        while (m.find()) {
-            for (int k = m.start(); k < m.end(); k++) {
-                sb.setCharAt(k, ' ');
-            }
-        }
-        return sb.toString();
     }
 }

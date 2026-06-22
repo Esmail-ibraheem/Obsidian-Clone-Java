@@ -77,6 +77,19 @@ class IndexServiceTest {
     }
 
     @Test
+    void deletingADirectoryRemovesContainedNotes() {
+        vault.write("Target.md", "# T", null);
+        vault.write("folder/a.md", "[[Target]]", null);
+        vault.write("folder/sub/b.md", "[[Target]]", null);
+        index.build();
+        assertThat(index.backlinks("Target.md")).hasSize(2);
+
+        // The native watcher emits a single DELETED for the directory.
+        index.onFileDeleted("folder");
+        assertThat(index.backlinks("Target.md")).isEmpty();
+    }
+
+    @Test
     void resolveAndTagsAndHeadingsExposed() {
         vault.write("Folder/Doc.md", "# Heading\n#topic\nlink [[Doc]]", null);
         index.build();

@@ -120,6 +120,21 @@ class FileControllerTest {
     }
 
     @Test
+    void writeWithEmptyBodyAndNoContentTypeSucceeds() throws Exception {
+        when(vault.write(eq("a.md"), eq(""), isNull()))
+                .thenReturn(new NoteContent("a.md", "", 10L, 0L));
+        // No body, no Content-Type header (the "clear a note" shape).
+        mvc.perform(put("/api/files").param("path", "a.md"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void nullJsonBodyReturns400() throws Exception {
+        mvc.perform(post("/api/files").contentType(MediaType.APPLICATION_JSON).content("null"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void renameReturnsUpdatedNotes() throws Exception {
         when(renameService.rename("o.md", "n.md", true))
                 .thenReturn(new RenameResponse("o.md", "n.md", List.of("s.md")));

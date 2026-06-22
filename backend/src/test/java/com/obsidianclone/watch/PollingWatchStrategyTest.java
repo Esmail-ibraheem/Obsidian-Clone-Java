@@ -7,9 +7,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,28 @@ class PollingWatchStrategyTest {
         await().atMost(Duration.ofSeconds(3)).until(() -> events.contains("CREATED:trigger.md"));
 
         assertThat(events).doesNotContain("CREATED:pre-existing.md");
+    }
+
+    @Test
+    void aThrowingListenerDoesNotReplayTheBatch() throws IOException {
+        AtomicInteger calls = new AtomicInteger();
+        strategy = new PollingWatchStrategy(80);
+        strategy.start(root, (type, path) -> {
+            events.add(type + ":" + root.relativize(path));
+            if (calls.incrementAndGet() == 1) {
+                throw new RuntimeException("boom"); // first delivery fails
+            }
+        });
+
+        Files.writeString(root.resolve("a.md"), "x");
+        await().atMost(Duration.ofSeconds(3)).until(() -> calls.get() >= 1);
+
+        // Trigger another tick; a.md must not be re-reported despite the earlier throw.
+        Files.writeString(root.resolve("b.md"), "y");
+        await().atMost(Duration.ofSeconds(3)).until(() -> events.contains("CREATED:b.md"));
+
+        long aCreations = events.stream().filter(e -> e.equals("CREATED:a.md")).count();
+        assertThat(aCreations).isEqualTo(1);
     }
 
     @Test

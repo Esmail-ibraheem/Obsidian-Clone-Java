@@ -3,10 +3,10 @@ package com.obsidianclone.watch;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -61,28 +61,44 @@ public class PollingWatchStrategy implements WatchStrategy {
     }
 
     private void tick() {
+        Map<Path, FileMeta> current;
         try {
-            Map<Path, FileMeta> current = scan();
-
-            for (Map.Entry<Path, FileMeta> e : current.entrySet()) {
-                FileMeta previous = snapshot.get(e.getKey());
-                if (previous == null) {
-                    onChange.accept(ChangeType.CREATED, e.getKey());
-                } else if (!previous.equals(e.getValue())) {
-                    onChange.accept(ChangeType.MODIFIED, e.getKey());
-                }
-            }
-            Set<Path> deleted = new HashSet<>(snapshot.keySet());
-            deleted.removeAll(current.keySet());
-            for (Path p : deleted) {
-                onChange.accept(ChangeType.DELETED, p);
-            }
-
-            snapshot.clear();
-            snapshot.putAll(current);
+            current = scan();
         } catch (RuntimeException e) {
             log.warn("Vault poll failed: {}", e.getMessage());
+            return;
         }
+
+        List<Change> changes = new ArrayList<>();
+        for (Map.Entry<Path, FileMeta> e : current.entrySet()) {
+            FileMeta previous = snapshot.get(e.getKey());
+            if (previous == null) {
+                changes.add(new Change(ChangeType.CREATED, e.getKey()));
+            } else if (!previous.equals(e.getValue())) {
+                changes.add(new Change(ChangeType.MODIFIED, e.getKey()));
+            }
+        }
+        for (Path p : snapshot.keySet()) {
+            if (!current.containsKey(p)) {
+                changes.add(new Change(ChangeType.DELETED, p));
+            }
+        }
+
+        // Advance the baseline exactly once, BEFORE delivery, so a listener that
+        // throws can't force the whole batch to be replayed on the next tick.
+        snapshot.clear();
+        snapshot.putAll(current);
+
+        for (Change c : changes) {
+            try {
+                onChange.accept(c.type(), c.path());
+            } catch (RuntimeException ex) {
+                log.warn("Change listener failed for {}: {}", c.path(), ex.getMessage());
+            }
+        }
+    }
+
+    private record Change(ChangeType type, Path path) {
     }
 
     private Map<Path, FileMeta> scan() {

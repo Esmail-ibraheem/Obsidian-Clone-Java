@@ -70,6 +70,40 @@ public class NativeWatchStrategy implements WatchStrategy {
         }
     }
 
+    /**
+     * Register a newly-created directory AND emit CREATED for files that already
+     * exist inside it (a folder is often created already populated — copy/move,
+     * or mkdir+write within one batch — and WatchService only reports events that
+     * happen after registration). Nested directories are registered recursively.
+     */
+    private void registerTreeAndEmit(Path dir, BiConsumer<ChangeType, Path> onChange) {
+        register(dir);
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.forEach(p -> {
+                if (Files.isDirectory(p)) {
+                    if (!p.equals(dir)) {
+                        register(p);
+                    }
+                } else {
+                    onChange.accept(ChangeType.CREATED, p);
+                }
+            });
+        } catch (IOException e) {
+            log.warn("Failed to scan new directory {}: {}", dir, e.getMessage());
+        }
+    }
+
+    /** Cancel and forget watch keys for a deleted directory and its descendants. */
+    private void pruneKeysUnder(Path deleted) {
+        keys.entrySet().removeIf(entry -> {
+            if (entry.getValue().startsWith(deleted)) {
+                entry.getKey().cancel();
+                return true;
+            }
+            return false;
+        });
+    }
+
     private void register(Path dir) {
         try {
             WatchKey key = dir.register(watchService,
@@ -104,7 +138,7 @@ public class NativeWatchStrategy implements WatchStrategy {
                 Path changed = dir.resolve((Path) event.context());
                 if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
                     if (Files.isDirectory(changed)) {
-                        register(changed); // watch new subtree
+                        registerTreeAndEmit(changed, onChange);
                     } else {
                         onChange.accept(ChangeType.CREATED, changed);
                     }
@@ -113,7 +147,10 @@ public class NativeWatchStrategy implements WatchStrategy {
                         onChange.accept(ChangeType.MODIFIED, changed);
                     }
                 } else if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
+                    // Could be a file or a whole directory; downstream removal is
+                    // recursive, and we drop any watch keys under it.
                     onChange.accept(ChangeType.DELETED, changed);
+                    pruneKeysUnder(changed);
                 }
             }
             if (!key.reset()) {

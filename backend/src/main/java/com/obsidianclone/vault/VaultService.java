@@ -43,6 +43,7 @@ public class VaultService {
         try (Stream<Path> entries = Files.list(dir)) {
             List<Path> sorted = entries
                     .filter(p -> !p.getFileName().toString().startsWith("."))
+                    .filter(p -> !Files.isSymbolicLink(p)) // never follow symlinks out of the vault
                     .sorted(treeOrder())
                     .toList();
             for (Path p : sorted) {

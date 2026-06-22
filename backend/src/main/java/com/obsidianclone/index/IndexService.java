@@ -69,7 +69,9 @@ public class IndexService {
     public void onFileDeleted(String path) {
         lock.writeLock().lock();
         try {
-            graph.remove(path);
+            // path may be a deleted directory (native watcher reports one event for
+            // the dir, not per contained note), so remove everything beneath it too.
+            graph.removeRecursively(path);
         } finally {
             lock.writeLock().unlock();
         }

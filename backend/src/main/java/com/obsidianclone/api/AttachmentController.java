@@ -1,7 +1,6 @@
 package com.obsidianclone.api;
 
 import java.io.IOException;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,10 +8,12 @@ import java.nio.file.Path;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
+import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriUtils;
 
 import com.obsidianclone.vault.VaultNotFoundException;
 import com.obsidianclone.vault.VaultPathResolver;
@@ -39,7 +40,9 @@ public class AttachmentController {
     public ResponseEntity<Resource> get(HttpServletRequest request) {
         String uri = request.getRequestURI();
         String encoded = uri.substring(uri.indexOf(PREFIX) + PREFIX.length());
-        String relative = URLDecoder.decode(encoded, StandardCharsets.UTF_8);
+        // Percent-decode with PATH semantics: '+' is a literal plus in a path,
+        // not a space (URLDecoder's form-decoding would corrupt filenames).
+        String relative = UriUtils.decode(encoded, StandardCharsets.UTF_8);
 
         Path file = resolver.resolve(relative);
         if (!Files.isRegularFile(file)) {
@@ -52,8 +55,8 @@ public class AttachmentController {
             if (probed != null) {
                 mediaType = MediaType.parseMediaType(probed);
             }
-        } catch (IOException ignored) {
-            // fall back to octet-stream
+        } catch (IOException | InvalidMediaTypeException ignored) {
+            // OS mime map missing or malformed -> fall back to octet-stream
         }
 
         return ResponseEntity.ok()

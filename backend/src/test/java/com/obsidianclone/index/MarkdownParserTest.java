@@ -85,6 +85,19 @@ class MarkdownParserTest {
     }
 
     @Test
+    void mixedFenceMarkersDoNotPrematurelyCloseACodeBlock() {
+        ParsedNote n = parser.parse("a.md", String.join("\n",
+                "```",
+                "~~~",
+                "[[ShouldBeIgnored]]",
+                "#shouldBeIgnored",
+                "```",
+                "real [[RealLink]] #realtag"));
+        assertThat(n.links()).extracting(LinkRef::rawTarget).containsExactly("RealLink");
+        assertThat(n.tags()).containsExactly("realtag");
+    }
+
+    @Test
     void doesNotReadAnchorAsTag() {
         ParsedNote n = parser.parse("a.md", "Jump to [[Doc#Overview]] now");
         assertThat(n.tags()).isEmpty();
