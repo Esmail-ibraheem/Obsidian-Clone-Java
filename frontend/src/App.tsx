@@ -1,25 +1,30 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import "@/styles/theme.css";
+import Ribbon from "@/components/layout/Ribbon";
+import FileExplorer from "@/components/explorer/FileExplorer";
+import PaneTree from "@/components/workspace/PaneTree";
+import BacklinksPanel from "@/components/backlinks/BacklinksPanel";
+import { useVaultStore } from "@/stores/vaultStore";
+import { connectVaultSocket } from "@/ws/wsClient";
 
-/**
- * Phase 0 walking-skeleton app: proves the frontend can reach the backend
- * through the Vite proxy. Replaced by the real Workspace layout in Phase 5.
- */
 export default function App() {
-  const [status, setStatus] = useState<string>("connecting…");
+  const loadTree = useVaultStore((s) => s.loadTree);
 
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((d) => setStatus(d.status))
-      .catch(() => setStatus("backend unreachable"));
-  }, []);
+    void loadTree();
+    connectVaultSocket();
+  }, [loadTree]);
 
   return (
-    <div style={{ fontFamily: "sans-serif", padding: 24 }}>
-      <h1>Obsidian Clone</h1>
-      <p>
-        backend health: <strong data-testid="health">{status}</strong>
-      </p>
+    <div className="app">
+      <Ribbon />
+      <div className="sidebar">
+        <FileExplorer />
+      </div>
+      <PaneTree />
+      <div className="sidebar right">
+        <BacklinksPanel />
+      </div>
     </div>
   );
 }

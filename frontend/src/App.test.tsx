@@ -1,21 +1,32 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+
+// Avoid opening a real SockJS connection in jsdom.
+vi.mock("@/ws/wsClient", () => ({ connectVaultSocket: vi.fn(), disconnectVaultSocket: vi.fn() }));
+
+vi.mock("@/api/client", () => ({
+  api: {
+    getTree: vi.fn(() =>
+      Promise.resolve([{ name: "Welcome.md", path: "Welcome.md", type: "FILE", children: null }]),
+    ),
+    getBacklinks: vi.fn(() => Promise.resolve([])),
+    readFile: vi.fn(() => Promise.resolve({ path: "Welcome.md", content: "# Hi", mtime: 1, size: 4 })),
+  },
+}));
+
 import App from "@/App";
 
 beforeEach(() => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(() =>
-      Promise.resolve({ json: () => Promise.resolve({ status: "ok" }) } as Response),
-    ),
-  );
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
-test("renders backend health status from /api/health", async () => {
+test("renders the shell and loads the vault tree", async () => {
   render(<App />);
-  await waitFor(() => expect(screen.getByTestId("health")).toHaveTextContent("ok"));
+  expect(screen.getByText("Files")).toBeInTheDocument();
+  expect(screen.getByText("Backlinks")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText("Welcome")).toBeInTheDocument());
 });
