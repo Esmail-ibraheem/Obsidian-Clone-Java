@@ -1,0 +1,20 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: obsidian-clone
+
+# Vault configuration (see com.obsidianclone.config.VaultProperties)
+vault:
+  # Absolute path to the vault root inside the container. Overridden by VAULT_ROOT env.
+  root: ${VAULT_ROOT:/vault}
+  watch:
+    # native | polling | auto  -- polling is the safe default for Windows<->WSL bind mounts
+    mode: ${VAULT_WATCH_MODE:auto}
+    # polling interval in milliseconds (used by the polling strategy)
+    interval-ms: 1000
+
+logging:
+  level:
+    com.obsidianclone: INFO

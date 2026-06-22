@@ -1,0 +1,12 @@
+# Dev image: full JDK 21 + Gradle (cached locally as gradle:8.10.2-jdk21).
+# Source is bind-mounted by docker-compose.dev.yml; the Gradle cache is a named
+# volume so dependencies persist across restarts. Dependency downloads happen at
+# runtime (bootRun), using the DNS servers set on the compose service.
+FROM gradle:8.10.2-jdk21
+
+WORKDIR /app
+
+EXPOSE 8080
+
+# --no-daemon is the recommended mode inside containers.
+CMD ["gradle", "--no-daemon", "bootRun"]

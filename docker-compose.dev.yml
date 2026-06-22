@@ -1,0 +1,60 @@
+# Development stack with hot reload, for the user's WSL Docker.
+#   wsl bash -lc 'cd /mnt/f/Obsidian && docker compose -f docker-compose.dev.yml up --build'
+# Frontend (the app): http://localhost:5173  (proxies /api and /ws to backend)
+# Backend API:        http://localhost:8080
+#
+# `dns:` is set because this environment's default WSL resolver times out;
+# 1.1.1.1/8.8.8.8 let in-container dependency downloads (Gradle, npm) resolve.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    # Run as root so Gradle can write its cache into the (root-owned) named
+    # volume; HOME stays /home/gradle so GRADLE_USER_HOME resolves there.
+    user: root
+    ports:
+      - "8080:8080"
+    environment:
+      VAULT_ROOT: /vault
+      # Windows<->WSL bind mounts don't deliver reliable inotify events, so
+      # default the dev watcher to polling.
+      VAULT_WATCH_MODE: polling
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - ./backend:/app
+      - gradle-cache:/home/gradle/.gradle
+      - ./vault:/vault
+    networks:
+      - app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_BACKEND_URL: http://backend:8080
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - ./frontend:/app
+      # Keep container node_modules separate from the host bind mount.
+      - frontend-node-modules:/app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - app
+
+volumes:
+  gradle-cache:
+  frontend-node-modules:
+
+networks:
+  app:
+    driver: bridge

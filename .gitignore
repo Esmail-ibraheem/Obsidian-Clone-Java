@@ -1,10 +1,9 @@
-# ---- Java / Maven (backend) ----
+# ---- Java / Gradle (backend) ----
+build/
+.gradle/
 target/
-!.mvn/wrapper/maven-wrapper.jar
 *.class
 *.log
-.mvn/timing.properties
-HELP.md
 
 # ---- Node / Vite (frontend) ----
 node_modules/

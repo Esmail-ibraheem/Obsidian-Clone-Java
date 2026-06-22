@@ -1,0 +1,23 @@
+# Production stack: a single image (built in backend/Dockerfile) that serves
+# both the REST/WebSocket API and the pre-built React bundle.
+#   wsl bash -lc 'cd /mnt/f/Obsidian && docker compose up --build'
+# App: http://localhost:8080
+#
+# See backend/Dockerfile re: how the prod jar is built given this environment's
+# build-time DNS limitation (finalized in Phase 8).
+
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      VAULT_ROOT: /vault
+      VAULT_WATCH_MODE: polling
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - ./vault:/vault
