@@ -4,9 +4,11 @@ A self-hosted, web-based clone of [Obsidian](https://obsidian.md) — Spring Boo
 backend over a filesystem vault of `.md` files, React + CodeMirror 6 frontend
 with inline Live Preview. Runs entirely in Docker (WSL-friendly).
 
-> **Status:** M1 in progress — foundation + core editing & linking. See
-> [`docs/superpowers/specs/`](docs/superpowers/specs/) for the design and
-> [`docs/superpowers/plans/`](docs/superpowers/plans/) for the build plan.
+> **Status:** M1 complete — foundation + core editing & linking. File explorer
+> (CRUD), CodeMirror 6 **inline Live Preview**, `[[wikilinks]]` (autocomplete,
+> navigate, create-on-click), `![[embeds]]`, backlinks, tabs + split panes,
+> autosave, and live filesystem sync. See [`docs/superpowers/specs/`](docs/superpowers/specs/)
+> for the design and [`docs/superpowers/plans/`](docs/superpowers/plans/) for the plan.
 
 ## Architecture
 
@@ -37,11 +39,20 @@ The Vite dev server proxies `/api` and `/ws` to the backend, so use port **5173*
 
 ### Production (single image)
 
+The production image is one container that serves both the API and the built
+React bundle. Build + run it with:
+
 ```bash
-wsl bash -lc 'cd /mnt/f/Obsidian && docker compose up --build'
+wsl bash -lc 'cd /mnt/f/Obsidian && ./build-prod.sh'
 ```
 
 - App: <http://localhost:8080>
+
+`build-prod.sh` builds the frontend bundle and the backend jar in `docker run
+--dns` steps, then `backend/Dockerfile` packages the jar onto a slim JRE via a
+network-free `COPY`. (This indirection exists because this machine's Docker
+can't resolve DNS during `docker build` RUN steps — see the note below.) Stop
+the dev stack first, since both bind port 8080.
 
 ## The vault
 

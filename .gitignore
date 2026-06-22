@@ -4,6 +4,8 @@ build/
 target/
 *.class
 *.log
+# Generated: the React bundle is copied here by build-prod.sh
+backend/src/main/resources/static/
 
 # ---- Node / Vite (frontend) ----
 node_modules/

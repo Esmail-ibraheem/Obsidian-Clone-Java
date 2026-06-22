@@ -30,6 +30,10 @@ dependencies {
     testImplementation 'org.awaitility:awaitility'
 }
 
+tasks.named('bootJar') {
+    archiveFileName = 'app.jar'
+}
+
 tasks.named('test') {
     useJUnitPlatform()
     // Mockito is configured to use its subclass mock-maker (see
